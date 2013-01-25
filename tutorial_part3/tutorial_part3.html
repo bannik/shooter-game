@@ -1,0 +1,316 @@
+<!doctype html>
+
+<html>
+
+    <head>
+        <title>HTML 5 Shooter</title>
+
+		<script type="text/javascript" src="easel.js"></script>
+
+		<script type="text/javascript">
+			var stage;
+			var canvas;
+			var g;
+			var stars;
+			var explosions;
+			
+			var BULLET_SPEED = 15;
+			var ROCK_LIMIT = 8;
+			var ROCK_SPEED = 8;
+			var rocks;
+			var ship;
+			var shipImg;
+			var speed = 8;
+			var moveLeft = false;
+			var moveRight = false;
+			var moveUp = false;
+			var moveDown = false;
+			var gameOver = false;
+			var bullets;
+			var bulletG;
+
+			function init() {
+				canvas = document.getElementById("canvas");
+				stage = new Stage(canvas);
+
+				explosions = new Array();
+				rocks   = new Array();
+				bullets = new Array();
+				bulletG = new Graphics();
+				bulletG.setStrokeStyle(1);
+				bulletG.beginStroke(Graphics.getRGB(180,0,0));
+				bulletG.beginFill(Graphics.getRGB(200,200,0));
+				bulletG.drawCircle(0,0, 3);
+				
+				createStarField();  
+				
+				shipImg = new Image();
+				shipImg.onload = onShipLoaded;
+				shipImg.src  = "./ship.png";
+
+				Ticker.setFPS(30);
+				Ticker.addListener(window);
+				
+				window.onkeydown = onKeyDown;
+				window.onkeyup   = onKeyUp;
+			}
+			
+			function onShipLoaded() {
+				ship = new Bitmap(shipImg);
+				ship.regX = ship.image.width * 0.5;
+				ship.regY = ship.image.height * 0.5;
+				ship.x    = 320;
+				ship.y 	  = 450;
+				
+				stage.addChild(ship);			
+			}
+			
+			function onKeyDown(e) {		
+				if(!e){ var e = window.event; }
+			
+				switch(e.keyCode) {
+					// left
+					case 37: 	moveLeft = true; moveRight = false;	break;					
+					// up
+					case 38:	moveUp = true; moveDown = false;	break;					
+					// right
+					case 39:	moveRight = true; moveLeft = false;	break;										
+					// down
+					case 40:	moveDown = true; moveUp = false;	break;
+				}
+			}
+		
+			function onKeyUp(e) {		
+				if(!e){ var e = window.event; }
+			
+				switch(e.keyCode) {
+					// left
+					case 37: 	moveLeft = false;	break;					
+					// up
+					case 38:	moveUp = false;		break;					
+					// right
+					case 39:	moveRight = false;	break;
+					// down
+					case 40:	moveDown = false;	break;
+					// Space
+					case 32:	doFire();			break;
+				}
+			}
+			
+			function doFire() {				
+				var bullet = new Shape(bulletG);
+				bullet.scaleY = 1.5;
+				bullet.x = ship.x;
+				bullet.y = ship.y - 30;
+				bullets.push(bullet);
+				
+				stage.addChild(bullet);
+			}
+		
+			function tick() {
+				if(gameOver != true) {
+					collide();
+					createRock();
+					checkMovement();
+				}
+				
+				updateStarField();
+				updateBullets();
+				updateRocks();
+				updateExplosions();
+				stage.update();
+			}
+			
+			function endGame() {
+				createExplosion(ship.x, ship.y);
+				stage.removeChild(ship);	
+				
+				gameOver = true;			
+				
+				var goverText = new Text("GAME OVER", "72pt bold Arial", "#cc0000");
+				goverText.textAlign = "center";
+				goverText.x = 320;
+				goverText.y = 240;
+				stage.addChild(goverText);
+			}
+
+			function updateStarField() {
+				var curStar;
+				var limit = stars.length;
+				for(var i = 0; i < limit; ++i) {
+					curStar = stars[i];
+					curStar.y += 4;
+					if(curStar.y > 480)
+					{
+						curStar.x = randRange(10, 630);
+						curStar.y = -randRange(20, 450);
+					}
+				}
+			}
+			
+			function updateBullets() {
+				var bLimit = bullets.length - 1;
+				
+				for(var i = bLimit; i >= 0; --i) {
+					bullets[i].y -= BULLET_SPEED;
+					if(bullets[i].y < -3) {
+						stage.removeChild(bullets[i]);					
+						bullets.splice(i, 1)
+					}
+				}
+			}
+			
+			function updateRocks() {
+				var loopLimit = rocks.length - 1;
+				for(var i = loopLimit; i >= 0; --i) {
+					rocks[i].y += ROCK_SPEED;
+					if(rocks[i].y > 500) {					
+						stage.removeChild(rocks[i]);
+						rocks.splice(i, 1);
+					}
+				}
+			}
+			
+			function updateExplosions() {
+				var loopLimit = explosions.length - 1;
+				for(var i = loopLimit; i >= 0; --i) {
+					explosions[i].alpha -= 0.1;
+					if(explosions[i].alpha <= 0) {
+						stage.removeChild(explosions[i]);
+						explosions.splice(i, 1);
+					}
+				}
+			}
+			
+			function collide() {
+				var numRocks = rocks.length - 1;
+				var numBullets = bullets.length - 1;
+				var curRock, curBullet;
+				
+				for(var i = numRocks; i >= 0; --i) {
+					curRock = rocks[i];
+					if(distance(curRock, ship) < 45) { // a distance of 45 gives a little cushion for the player
+						endGame();
+					}
+					
+					for(var j = numBullets; j >= 0; --j) {
+						curBullet = bullets[j];
+						
+						if( distance(curRock, curBullet) < 32)  {
+							stage.removeChild(curRock);
+							stage.removeChild(curBullet);
+							createExplosion(curRock.x, curRock.y);
+							rocks.splice(i, 1);
+							bullets.splice(j, 1);				
+						}
+					}
+					numBullets = bullets.length - 1;
+				}
+			}
+			
+			function checkMovement() {
+				if(moveLeft)
+				{
+					ship.x -= speed;
+					if(ship.x < 0)
+						ship.x = 640;
+				}
+				else if(moveRight)
+				{
+					ship.x += speed;
+					if(ship.x > 640)
+						ship.x = 0;
+				}
+					
+				if(moveUp)
+				{
+					if(ship.y - speed > 24)
+					{
+						ship.y -= speed;
+						BG_SPEED = 8;
+					}
+				}
+				else if(moveDown)
+				{
+					if(ship.y + speed < 460)
+					{
+						ship.y += speed;
+						BG_SPEED = 3;
+					}
+				}
+				else
+					BG_SPEED = 4;
+			}
+			
+			function createStarField() {
+				stars = new Array();
+
+				g = new Graphics();
+				g.setStrokeStyle(1);
+				g.beginStroke(Graphics.getRGB(255,255,255));
+				g.beginFill(Graphics.getRGB(255,255,255));
+				g.drawCircle(0,0, 1);
+
+				for(var i = 0; i < 100; ++i) {
+						var s = new Shape(g);
+					stars.push(s);
+					s.x = randRange(10, 630);
+					s.y = randRange(-250, 470);
+					s.scaleX = randRange(0.5, 2);
+						s.scaleY = s.scaleX;
+					s.alpha = Math.random() + 0.2;
+
+				   stage.addChild(s);
+				}
+			}
+			
+			function createRock() {
+				if(randRange(0, 100) > 80 && rocks.length < ROCK_LIMIT) {
+					var r = new Bitmap("rock.png");
+					r.regX = r.image.width * 0.5;
+					r.regY = r.image.height * 0.5;
+					r.x = randRange(20, 630);
+					r.y = -randRange(50, 100);
+					rocks.push(r);				
+					stage.addChild(r);
+				}
+			}
+			function createExplosion(xpos, ypos) {
+				var exp = new Bitmap("explode.png");
+				exp.regX = exp.image.width * 0.5;
+				exp.regY = exp.image.height * 0.5;
+				exp.x = xpos;
+				exp.y = ypos;
+				explosions.push(exp);
+				stage.addChild(exp);
+			}
+
+			function distance(obj1, obj2) {
+				var difx = obj2.x - obj1.x;
+				var dify = obj2.y - obj1.y;
+				
+				return Math.sqrt( (difx*difx) + (dify*dify) );
+			}
+			
+			function randRange(min, max) {
+				return Math.floor(Math.random() * (max - min)) + min;
+			}
+		</script>
+		
+    </head>
+
+    <body onload="init();" style="background-color:#001132;">
+
+        <div id="wrapper" style="width:640px; height:480px;
+                 margin-left:auto; margin-right:auto;
+                 background-color:#000; border:5px ridge #cc8811">
+
+	    <canvas id="canvas" width=640 height=480
+                    style="margin-left:auto; margin-right:auto;">
+	    </canvas>
+
+	</div>
+
+    </body>
+
+</html>
